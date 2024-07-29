@@ -1,4 +1,4 @@
-"use client";
+import React from "react";
 import type { NextPage } from "next";
 import TaskHeader from "./Header";
 import Card from "./Card";
@@ -30,13 +30,6 @@ enum TaskStatus {
   InProgress = "In Progress",
   UnderReview = "Under Review",
   Finished = "Finished",
-}
-
-enum TaskPriority {
-  NotSelected = "Not selected",
-  Low = "Low",
-  Medium = "Medium",
-  Urgent = "Urgent",
 }
 
 const MainPage: NextPage<{ name: string }> = ({ name }) => {
@@ -93,7 +86,6 @@ const MainPage: NextPage<{ name: string }> = ({ name }) => {
 
   const handleDragEnd = async (result: any) => {
     const { destination, source } = result;
-
     if (
       !destination ||
       (destination.droppableId === source.droppableId &&
@@ -102,26 +94,42 @@ const MainPage: NextPage<{ name: string }> = ({ name }) => {
       return;
     }
 
-    const movedTask = filteredTasks[source.index];
-    const updatedTasks = [...filteredTasks];
-    updatedTasks.splice(source.index, 1);
-    updatedTasks.splice(destination.index, 0, movedTask);
-
-    setData(updatedTasks);
-
-    // Update the task status in the backend
+    const movedTask = data[source.index];
     const updatedStatus = destination.droppableId as TaskStatus;
 
     try {
-      await fetch(`${BACKEND_URL}/api/v1/task/${movedTask._id}`, {
-        method: "PATCH",
+      const res = await fetch(`${BACKEND_URL}/api/v1/task/${movedTask._id}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify({ status: updatedStatus }),
       });
+
+      if (!res.ok) {
+        throw new Error("Failed to update task status");
+      }
+
+      const updatedTask = await res.json();
+
+      const updatedTasks = Array.from(data);
+      updatedTasks.splice(source.index, 1); // Remove the task from the original position
+
+      // Find the new index for the task in the destination status
+      const newDestinationIndex = updatedTasks.findIndex(
+        (task, index) =>
+          task.status === updatedStatus && index >= destination.index
+      );
+
+      updatedTasks.splice(newDestinationIndex, 0, {
+        ...movedTask,
+        status: updatedStatus,
+      });
+
+      setData(updatedTasks);
     } catch (error) {
+      console.error(error);
       setError("Failed to update task status");
     }
   };
@@ -212,7 +220,7 @@ const MainPage: NextPage<{ name: string }> = ({ name }) => {
               placeholder="Search"
               value={searchQuery}
               onChange={handleSearch}
-              className={`w-full text-black border-none bg-transparent outline-none`}
+              className="w-full text-black border-none bg-transparent outline-none"
             />
             <IoIosSearch className="h-6 w-6 relative " />
           </div>
@@ -225,47 +233,48 @@ const MainPage: NextPage<{ name: string }> = ({ name }) => {
                 <CiCalendar className="h-6 w-6 relative " />
               </div>
               <div className="rounded  flex flex-row items-center justify-start p-2 gap-[14px]">
-                <div className="relative inline-block min-w-[38px]">
-                  Automation
-                </div>
-                <BsStars className="h-6 w-6 relative " />
-              </div>
-              <div className="rounded  flex flex-row items-center justify-start p-2 gap-[14px]">
                 <div className="relative inline-block min-w-[38px]">Filter</div>
                 <CiFilter className="h-6 w-6 relative " />
               </div>
               <div className="rounded  flex flex-row items-center justify-start p-2 gap-[14px]">
-                <div className="relative inline-block min-w-[38px]">Share</div>
-                <IoShareSocialOutline className="h-6 w-6 relative " />
+                <div className="relative inline-block min-w-[38px]">
+                  Shortcuts
+                </div>
+                <BsStars className="h-6 w-6 relative " />
               </div>
             </div>
             <div className="rounded  flex flex-row items-center justify-start p-2 gap-[14px]">
-              <div className="relative inline-block min-w-[38px]">Sort</div>
-              <MdOutlineSort className="h-6 w-6 relative " />
+              <div className="relative inline-block min-w-[38px]">
+                <IoShareSocialOutline className="h-6 w-6 relative " />
+              </div>
             </div>
+            <button className="cursor-pointer [border:none] p-2 bg-[transparent] rounded-lg [background:linear-gradient(180deg,_#3a3a3a,_#202020)] flex flex-row items-center justify-between whitespace-nowrap gap-[20px]">
+              <div className="relative text-base font-inter text-white text-left inline-block min-w-[67px]">
+                Share
+              </div>
+              <FaPlusCircle className="h-6 w-6 text-white relative " />
+            </button>
           </div>
         </div>
       </header>
-      <section className="w-full h-auto self-stretch rounded-lg flex flex-row flex-wrap items-start justify-center py-4 px-4 gap-[12px] text-left text-xl text-dimgray-200 font-inter">
+      <main className="h-full flex flex-1 flex-row items-start justify-between gap-[16px] text-[inherit] text-left text-lg text-gray-300 font-inter">
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="w-full bg-white p-4 h-auto self-stretch flex flex-row items-start justify-between">
-            {Object.values(TaskStatus).map((status) => (
-              <div
-                key={status}
-                className="flex-1 flex flex-col items-start justify-start gap-[14px] min-w-[194px] max-w-[257px]"
-              >
-                <div className="self-stretch flex flex-row items-center justify-between gap-[20px]">
-                  <div className="w-[126px] relative inline-block mq450:text-base">
-                    {status}
-                  </div>
-                  <MdOutlineSort className="h-6 w-6 relative  min-h-[24px]" />
-                </div>
-                {renderTasks(status)}
-              </div>
-            ))}
-          </div>
+          {Object.values(TaskStatus).map((status) => (
+            <div
+              key={status}
+              className="flex-1 flex flex-col items-start justify-start gap-[16px] text-left text-[inherit] text-lg text-gray-300 font-inter"
+            >
+              <header className="w-full flex flex-row items-center justify-between gap-[20px] text-left text-[inherit] text-lg text-gray-300 font-inter">
+                <h2 className="relative font-semibold text-[inherit] whitespace-nowrap">
+                  {status}
+                </h2>
+                <MdOutlineSort className="h-6 w-6 relative " />
+              </header>
+              {renderTasks(status)}
+            </div>
+          ))}
         </DragDropContext>
-      </section>
+      </main>
     </div>
   );
 };
